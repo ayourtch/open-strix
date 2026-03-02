@@ -15,7 +15,6 @@ STATE_DIR_NAME = "state"
 DEFAULT_FOLDERS: dict[str, str] = {
     "state": "rw",
     "skills": "rw",
-    "blocks": "ro",
     "scripts": "ro",
     "logs": "ro",
 }
@@ -29,7 +28,6 @@ always_respond_bot_ids: []
 folders:
   state: rw
   skills: rw
-  blocks: ro
   scripts: ro
   logs: ro
 """
