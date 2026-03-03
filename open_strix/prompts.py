@@ -63,6 +63,16 @@ Python:
 """
 
 
+def render_folders_section(folders: dict[str, str]) -> str:
+    if not folders:
+        return ""
+    lines = ["Your visible folders and their permissions:"]
+    for name, mode in folders.items():
+        label = "read-write" if mode == "rw" else "read-only"
+        lines.append(f"- `{name}/` ({label})")
+    return "\n".join(lines)
+
+
 def _format_relative(delta_seconds: float) -> str:
     seconds = int(delta_seconds)
     if abs(seconds) < 5:

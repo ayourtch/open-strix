@@ -1,30 +1,7 @@
 # open-strix
 [![PyPI version](https://img.shields.io/pypi/v/open-strix.svg)](https://pypi.org/project/open-strix/)
 
-An AI agent that talks to you over Discord.
-
-* Memory blocks + files, all committed to Github
-* Web fetch/search, files, bash/powershell, subagents
-* Skills
-
-## Install uv
-
-Install `uv` first:
-
-```bash
-# macOS / Linux
-curl -LsSf https://astral.sh/uv/install.sh | sh
-```
-
-```powershell
-# Windows (PowerShell)
-powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-```
-
-Official install docs (alternate methods like Homebrew, pipx, winget):
-- https://docs.astral.sh/uv/getting-started/installation/
-
-## Quick start (recommended)
+A persistent AI companion that lives in your Discord server, remembers everything, and gets better over time.
 
 ```bash
 uvx open-strix setup --home my-agent --github
@@ -32,239 +9,111 @@ cd my-agent
 uv run open-strix
 ```
 
-Run setup explicitly first (`uvx open-strix setup ...`), then run `uv run open-strix` from inside that home.
+Three commands. You have an agent.
 
-`open-strix setup` bootstraps the target directory with:
+## What is this?
 
-- `state/`
-- `skills/`
-- `blocks/`
-- `logs/events.jsonl`
-- `logs/journal.jsonl`
-- `scheduler.yaml`
-- `config.yaml`
-- `checkpoint.md`
-- `pyproject.toml`
-- `uv.lock`
-- `.env` (template)
+open-strix is an opinionated framework for building long-running AI agents. Not chatbots — *companions*. Agents that develop personality through conversation, maintain memory across sessions, schedule their own work, and learn from their mistakes.
 
-It also runs:
-- `uv init --bare --python 3.11 --vcs none --no-workspace`
-- `uv add open-strix`
-- checks git commit identity and, if missing, prompts for:
-  - `user.name` (defaults to directory name)
-  - `user.email`
-- checks git remote and, if `origin` is missing, prompts for the remote URL
-- detects OS/tools and generates service bootstrap files in `services/`:
-  - Linux: `open-strix.service` (systemd user unit)
-  - macOS: `ai.open-strix.<name>.plist` (launchd agent)
-  - Windows: Task Scheduler install/uninstall PowerShell scripts
+It runs on cheap models (MiniMax M2.5, ~$0.01/message), talks to you over Discord, and stores everything in git. No vector databases, no cloud services, no enterprise pricing. Just files, memory blocks, and a git history you can actually read.
 
-It also prints a CLI walkthrough with links and step-by-step setup for:
-- MiniMax M2.5
-- Kimi/Moonshot
-- Discord bot creation + permissions
-- `config.yaml` values
+**How you interact with it:** You talk to it on Discord. It talks back using tools (`send_message`, `react`). It has scheduled jobs that fire even when you're not around. Over time, it develops interests, tracks your projects, and starts doing useful things without being asked.
 
-Then `uv run open-strix` connects to Discord if a token is present (by default `DISCORD_TOKEN`).
-Otherwise it runs in local stdin mode.
+## Why this exists
 
-## Installed mode (optional)
+Most agent frameworks optimize for tool-calling pipelines or enterprise orchestration. open-strix optimizes for a different thing: **a single agent that knows you and gets better over time.**
 
-If you prefer a local project install instead of `uvx`:
+Three design bets:
 
-```bash
-uv init --python 3.11
-uv add open-strix
-uv run open-strix setup --home .
-uv run open-strix
+- **Focused.** It has a small core that's easily extended through skills, MCP servers, and an HTTP API for incoming events. 
+- **Cheap.** Defaults to MiniMax M2.5 via the Anthropic-compatible API. Pennies per message. This is a personal tool, not an enterprise deployment. Run it on a $5/month VPS.
+- **Stable.** This is the weird one. open-strix ships with built-in skills for self-diagnosis — prediction calibration loops, event introspection, onboarding that fades into regular operation. The agent can read its own logs, check whether its predictions were right, and notice when it's drifting. The design draws on cybernetics (specifically viable system theory): an agent that can't monitor and correct its own behavior will eventually degrade. So the correction loops are built in, not bolted on.
+
+In other words, it's built to be sustainable.
+
+## How it works
+
+### The home repo
+
+When you run `uvx open-strix setup`, it creates a directory — the agent's *home*. Everything the agent knows lives here:
+
+```
+blocks/          # YAML memory blocks — identity, goals, patterns. In every prompt.
+state/           # Markdown files — projects, notes, research. Read on demand.
+skills/          # Markdown skill files. Drop one in, agent picks it up.
+logs/
+  events.jsonl   # Every tool call, error, and event. The agent can read this.
+  journal.jsonl  # Agent's own log — what happened, what it predicted.
+scheduler.yaml   # Cron jobs the agent manages itself.
+config.yaml      # Model, Discord config, prompt tuning.
 ```
 
-## Install and auth `gh` (GitHub CLI)
+Everything except logs is committed to git after every turn. The git history *is* the audit trail. You can `git log` to see exactly what your agent did and when.
 
-If you want `open-strix setup --github`, install and log into `gh` first.
+### Memory
 
-Install:
+Two layers:
 
-```bash
-# macOS (Homebrew)
-brew install gh
+- **Blocks** (`blocks/*.yaml`) — short text that appears in every prompt. Identity, communication style, current focus, relationships. The agent reads and writes these via tools.
+- **Files** (`state/`) — longer content the agent reads when relevant. Research notes, project tracking, world context. Blocks point to files when depth is needed.
 
-# Ubuntu / Debian
-sudo apt install gh
+No embeddings, no vector search. Just files and git. The agent's memory is whatever you can `cat`.
+
+### Skills
+
+A skill is a markdown file in `skills/` with a YAML header. That's it. No SDK, no registration, no build step. The agent sees all skills in its prompt and invokes them by name.
+
+```yaml
+---
+name: my-skill
+description: What this skill does and when to use it.
+---
+# Instructions for the agent
+...
 ```
 
-```powershell
-# Windows (winget)
-winget install --id GitHub.cli
-```
+open-strix also ships with built-in skills that teach the agent how to operate: memory management, prediction review, self-diagnosis, onboarding, and skill creation.
 
-Authenticate:
+### Scheduling
 
-```bash
-gh auth login
-gh auth status
-```
+The agent has tools to create, modify, and remove its own scheduled jobs. Jobs are cron expressions stored in `scheduler.yaml`. When a job fires, it sends a prompt to the agent — even if no human is around.
 
-Official docs:
-- https://cli.github.com/
-- https://github.com/cli/cli#installation
+This is how agents develop autonomy: scheduled check-ins, maintenance routines, periodic scanning. The agent decides what to schedule based on what it learns about you.
 
-## Create a GitHub repo and set remote
+### Events API
 
-`open-strix` auto-syncs with git after each turn, so set up a repo + remote early.
+Every tool call, incoming message, error, and scheduler trigger is logged to `logs/events.jsonl`. The agent can read its own event log — and the introspection skill teaches it how. This is the self-diagnosis backbone: the agent has full visibility into what it did and what went wrong.
 
-Recommended:
+When `api_port` is set in `config.yaml`, a loopback REST API accepts events from external scripts — Bluesky pollers, CI hooks, cross-agent communication. See [docs/events.md](docs/events.md) for the full event schema, query cookbook, and REST API reference.
+
+## Growing an agent
+
+The code is the easy part. The real work is the conversations.
+
+A new agent starts with an `init` memory block pointing it to the onboarding skill. From there, it's supposed to have real conversations with you — not fill out forms. It learns your schedule, your projects, your communication preferences by talking to you. Over days, it drafts identity blocks, sets up scheduled jobs, and starts operating autonomously.
+
+This takes time. Plan on a week of active conversation before the agent feels like it knows you. Plan on two weeks before it's doing useful things unprompted.
+
+See [GROWING.md](GROWING.md) for the full guide on what this process looks like and what to expect.
+
+## Setup
+
+Requires [uv](https://docs.astral.sh/uv/getting-started/installation/) and a Discord bot token.
 
 ```bash
 uvx open-strix setup --home my-agent --github
-```
-
-Keep this private, since agent memory and logs can contain sensitive context.
-
-Manual fallback with GitHub CLI (`gh`):
-
-```bash
 cd my-agent
-gh auth login
-gh repo create <repo-name> --private --source=. --remote=origin
-git add .
-git commit -m "Initial commit"
-git push -u origin HEAD
+# Edit .env with your API key and Discord token
+uv run open-strix
 ```
 
-Manual fallback with GitHub web UI:
+The setup command handles everything: directory structure, git init, GitHub repo creation (with `--github`), service files for your OS, and a walkthrough for model/Discord configuration.
 
-1. Create a new **private** empty repo on GitHub (no README, no `.gitignore`, no license).
-2. In your project directory:
+See [SETUP.md](SETUP.md) for detailed instructions on environment variables, model configuration, Discord setup, and deployment options.
 
-```bash
-git init
-git add .
-git commit -m "Initial commit"
-git branch -M main
-git remote add origin git@github.com:<your-user>/<repo-name>.git
-git push -u origin main
-```
+## Configuration
 
-If you prefer HTTPS:
-
-```bash
-git remote add origin https://github.com/<your-user>/<repo-name>.git
-```
-
-Check remote config:
-
-```bash
-git remote -v
-```
-
-## Environment setup
-
-Start from the example env file:
-
-```bash
-cp .env.example .env
-```
-
-Default model setup in this project expects an Anthropic-compatible endpoint:
-
-- `ANTHROPIC_API_KEY`
-- `ANTHROPIC_BASE_URL`
-
-Discord runtime uses:
-
-- `DISCORD_TOKEN`
-
-Optional:
-
-- `DISCORD_TEST_CHANNEL_ID`
-- `OPEN_STRIX_TEST_MODEL`
-
-## Models
-
-### Default: MiniMax M2.5
-
-This project defaults to:
-
-- `model: MiniMax-M2.5` in `config.yaml`
-- provider prefix `anthropic:` internally (so the runtime uses `anthropic:MiniMax-M2.5`)
-
-Use MiniMax's Anthropic-compatible endpoint in your `.env`:
-
-- `ANTHROPIC_BASE_URL=https://api.minimax.io/anthropic`
-
-MiniMax docs:
-
-- Anthropic compatibility + model IDs: https://platform.minimax.io/docs/api-reference/text-anthropic-api
-- AI coding tools guide (M2.5 context): https://platform.minimax.io/docs/guides/text-ai-coding-tools
-
-### Alternative: Kimi K2.5
-
-If you want Kimi instead of MiniMax:
-
-1. Point Anthropic-compatible env vars at Moonshot:
-   - `ANTHROPIC_BASE_URL=https://api.moonshot.ai/anthropic`
-2. Set `model` in `config.yaml` to the current Kimi model ID you want.
-
-Moonshot docs:
-
-- Docs overview: https://platform.moonshot.ai/docs/overview
-- K2 update post (links to current quick-start): https://platform.moonshot.ai/blog/posts/Kimi_API_Newsletter
-
-Note: the Moonshot update posted on November 8, 2025 references `kimi-k2-thinking` and `kimi-k2-thinking-turbo`. If you refer to these as "K2.5", use the exact current model IDs from Moonshot docs/console.
-
-### Model config behavior
-
-`config.yaml` key:
-
-- `model`
-
-Behavior:
-
-- If `model` has no `:` (example `MiniMax-M2.5`), open-strix treats it as Anthropic-provider and uses `anthropic:<model>`.
-- If `model` already includes `provider:model` (example `openai:gpt-4o-mini`), it is passed through unchanged.
-
-## Discord setup
-
-Use Discord's Developer Portal web UI:
-
-1. General Information: set app/bot name and any basic metadata.
-2. Installation: set `Install Link` to `None`, then save.
-3. OAuth2 -> URL Generator:
-   - check `bot`
-   - select practical bot permissions (focus on messaging/reactions/history/attachments):
-     - `View Channels`
-     - `Send Messages`
-     - `Send Messages in Threads`
-     - `Read Message History`
-     - `Add Reactions`
-     - `Attach Files`
-4. Bot tab:
-   - disable `Public Bot`
-   - enable `Message Content Intent`
-   - (later) set avatar/profile polish
-5. Bot tab -> `Reset Token`:
-   - copy token immediately (it may not be shown again)
-   - set `.env`: `DISCORD_TOKEN=<your_discord_bot_token>`
-6. Use the generated OAuth2 bot invite URL to add the bot to your server.
-
-Reference docs for the same flow:
-
-- Getting started (app creation + installation flow): https://docs.discord.com/developers/quick-start/getting-started
-- OAuth2 scopes/install links: https://docs.discord.com/developers/topics/oauth2
-- Permissions reference: https://docs.discord.com/developers/topics/permissions
-- Gateway + intents reference: https://docs.discord.com/developers/events/gateway
-
-Where this is configured in open-strix:
-
-- Token env var name: `config.yaml` -> `discord_token_env` (default `DISCORD_TOKEN`)
-- Actual token value: your `.env`
-- Bot allowlist behavior: `config.yaml` -> `always_respond_bot_ids`
-
-## `config.yaml` tour
-
-Default:
+`config.yaml`:
 
 ```yaml
 model: MiniMax-M2.5
@@ -274,39 +123,7 @@ discord_token_env: DISCORD_TOKEN
 always_respond_bot_ids: []
 ```
 
-Key meanings:
-
-- `model`: model name (or `provider:model`)
-- `journal_entries_in_prompt`: how many journal entries go into each prompt
-- `discord_messages_in_prompt`: how many recent Discord messages go into each prompt
-- `discord_token_env`: env var name to read Discord token from
-- `always_respond_bot_ids`: bot author IDs the agent is allowed to respond to
-
-Related files:
-
-- `scheduler.yaml`: cron/time-of-day jobs
-- `blocks/*.yaml`: memory blocks surfaced in prompt context
-- `checkpoint.md`: returned by `journal` tool after a journal write
-- `.open_strix_builtin_skills/scripts/prediction_review_log.py`: helper for structured prediction-accuracy reviews (read-only packaged script)
-- `skills/`: user-editable local skills
-- `/.open_strix_builtin_skills/skill-creator/SKILL.md`: packaged built-in skill source mounted as read-only
-- `/.open_strix_builtin_skills/prediction-review/SKILL.md`: packaged built-in skill for prediction calibration
-
-Runtime behavior note:
-
-- Git sync (`git add -A` -> commit -> push) runs automatically after each processed turn.
-- New agent homes are seeded with a twice-daily UTC scheduler job (`09:00` and `21:00`) for prediction-review calibration.
-
-## Personality bootstrap
-
-Creating an agent is less about code, and a whole lot more about the time you spend talking to it.
-[Lily Luo](https://www.appliedaiformops.com/p/what-building-a-persistent-ai-agent) has a great post on
-forming agent personalities.
-
-You should plan on spending time:
-
-* Communication patterns — correct the agent to know when and how often it should use the `send_message` and `react` tools. Agents often initially find it surprising that their final message is ignored, so they need to use their tools instead.
-* Talk about things you're interested in, see what the agent becomes interested in
+Models use the Anthropic-compatible API format. MiniMax M2.5 and Kimi K2.5 both work out of the box. Any model with an Anthropic-compatible endpoint will work — set `ANTHROPIC_BASE_URL` and `ANTHROPIC_API_KEY` in `.env`.
 
 ## Tests
 
@@ -314,19 +131,9 @@ You should plan on spending time:
 uv run pytest -q
 ```
 
-Discord coverage includes:
-- unit tests with mocked boundaries in `tests/test_discord.py`
-- live integration tests against real Discord in `tests/test_discord_live.py`
+## Safety
 
-Live test env vars:
-- `DISCORD_TOKEN` (required for live connect test)
-- `DISCORD_TEST_CHANNEL_ID` (optional; enables live send-message test)
-
-## Safety baseline
-
-- Agent file writes/edits are limited to `state/` and `skills/`.
-- Reads still use repository scope.
-- This is intentionally simple and should not be treated as production-ready.
+Agent file writes are limited to `state/` and `skills/`. Reads use repository scope. Built-in skills are read-only. This is intentionally simple and should not be treated as a security boundary.
 
 ## License
 

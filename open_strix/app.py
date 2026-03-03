@@ -46,7 +46,7 @@ from .discord import (
     _chunk_discord_message,
 )
 from .models import AgentEvent
-from .prompts import DEFAULT_CHECKPOINT, SYSTEM_PROMPT, render_turn_prompt
+from .prompts import DEFAULT_CHECKPOINT, SYSTEM_PROMPT, render_folders_section, render_turn_prompt
 from .readonly_backend import BUILTIN_SKILLS_ROUTE, build_builtin_skills_backend
 from .scheduler import SchedulerJob, SchedulerMixin
 from .tools import (
@@ -325,7 +325,7 @@ class OpenStrixApp(DiscordMixin, SchedulerMixin, ToolsMixin):
 
         mutable_backend = WriteGuardBackend(
             root_dir=self.home,
-            writable_dirs=[STATE_DIR_NAME, "skills"],
+            writable_dirs=self.config.writable_dirs,
         )
         builtin_backend = build_builtin_skills_backend(root_dir=self.home / BUILTIN_HOME_DIRNAME)
         backend = CompositeBackend(
@@ -341,10 +341,17 @@ class OpenStrixApp(DiscordMixin, SchedulerMixin, ToolsMixin):
         skills = skills_sources or None
         self._log_loaded_skills(skills_sources)
 
+        folders_text = render_folders_section(self.config.folders)
+        system_prompt = SYSTEM_PROMPT
+        if folders_text:
+            system_prompt = system_prompt.replace(
+                "Skills:", f"{folders_text}\n\nSkills:",
+            )
+
         self.agent = create_deep_agent(
             model=model,
             tools=self._build_tools(),
-            system_prompt=SYSTEM_PROMPT,
+            system_prompt=system_prompt,
             backend=backend,
             skills=skills,
         )

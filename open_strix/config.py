@@ -12,12 +12,24 @@ DEFAULT_MODEL = "MiniMax-M2.5"
 DEFAULT_MODEL_PROVIDER = "anthropic"
 STATE_DIR_NAME = "state"
 
+DEFAULT_FOLDERS: dict[str, str] = {
+    "state": "rw",
+    "skills": "rw",
+    "scripts": "ro",
+    "logs": "ro",
+}
+
 DEFAULT_CONFIG = """\
 model: MiniMax-M2.5
 journal_entries_in_prompt: 90
 discord_messages_in_prompt: 10
 discord_token_env: DISCORD_TOKEN
 always_respond_bot_ids: []
+folders:
+  state: rw
+  skills: rw
+  scripts: ro
+  logs: ro
 """
 
 DEFAULT_SCHEDULER = """\
@@ -158,6 +170,15 @@ class AppConfig:
     always_respond_bot_ids: set[str] = field(default_factory=set)
     session_log_retention_days: int = 30
     api_port: int = 0
+    folders: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_FOLDERS))
+
+    @property
+    def writable_dirs(self) -> list[str]:
+        return [name for name, mode in self.folders.items() if mode == "rw"]
+
+    @property
+    def all_dirs(self) -> list[str]:
+        return list(self.folders.keys())
 
 
 def _write_if_missing(path: Path, content: str) -> None:
@@ -182,6 +203,20 @@ def _normalize_id_list(value: Any) -> set[str]:
     return set()
 
 
+def _parse_folders(raw: Any) -> dict[str, str]:
+    if not isinstance(raw, dict):
+        return dict(DEFAULT_FOLDERS)
+    folders: dict[str, str] = {}
+    for name, mode in raw.items():
+        name_str = str(name).strip()
+        mode_str = str(mode).strip().lower()
+        if mode_str not in ("rw", "ro"):
+            mode_str = "ro"
+        if name_str:
+            folders[name_str] = mode_str
+    return folders if folders else dict(DEFAULT_FOLDERS)
+
+
 def load_config(layout: RepoLayout) -> AppConfig:
     loaded = yaml.safe_load(layout.config_file.read_text(encoding="utf-8")) or {}
     model_raw = loaded.get("model", DEFAULT_MODEL)
@@ -196,6 +231,7 @@ def load_config(layout: RepoLayout) -> AppConfig:
         always_respond_bot_ids=_normalize_id_list(loaded.get("always_respond_bot_ids")),
         session_log_retention_days=int(loaded.get("session_log_retention_days", 30)),
         api_port=int(loaded.get("api_port", 0)),
+        folders=_parse_folders(loaded.get("folders")),
     )
 
 
@@ -219,32 +255,42 @@ def _ensure_config_defaults(config_file: Path) -> None:
         loaded.pop("git_sync_after_turn", None)
         changed = True
 
+    if "folders" not in loaded:
+        loaded["folders"] = dict(DEFAULT_FOLDERS)
+        changed = True
+
     if changed:
         config_file.write_text(yaml.safe_dump(loaded, sort_keys=False), encoding="utf-8")
 
 
 def bootstrap_home_repo(layout: RepoLayout, checkpoint_text: str) -> None:
-    layout.state_dir.mkdir(parents=True, exist_ok=True)
-    layout.blocks_dir.mkdir(parents=True, exist_ok=True)
-    layout.skills_dir.mkdir(parents=True, exist_ok=True)
-    layout.scripts_dir.mkdir(parents=True, exist_ok=True)
-    layout.logs_dir.mkdir(parents=True, exist_ok=True)
-    layout.sessions_dir.mkdir(parents=True, exist_ok=True)
-    (layout.state_dir / ".gitkeep").touch(exist_ok=True)
-    (layout.blocks_dir / ".gitkeep").touch(exist_ok=True)
-    _write_if_missing(layout.blocks_dir / "init.yaml", DEFAULT_INIT_BLOCK)
-    (layout.skills_dir / ".gitkeep").touch(exist_ok=True)
-    (layout.scripts_dir / ".gitkeep").touch(exist_ok=True)
-    _write_if_missing(layout.phone_book_extra_file, DEFAULT_PHONE_BOOK_EXTRA)
+    # Ensure config exists first so we can read folders from it.
     _write_if_missing(layout.config_file, DEFAULT_CONFIG)
     _ensure_config_defaults(layout.config_file)
+
+    # Create directories from config.
+    loaded = yaml.safe_load(layout.config_file.read_text(encoding="utf-8")) or {}
+    folders = _parse_folders(loaded.get("folders"))
+    for name in folders:
+        folder_path = layout.home / name
+        folder_path.mkdir(parents=True, exist_ok=True)
+        (folder_path / ".gitkeep").touch(exist_ok=True)
+
+    # Sessions subdirectory under logs.
+    if "logs" in folders:
+        layout.sessions_dir.mkdir(parents=True, exist_ok=True)
+        layout.events_log.touch(exist_ok=True)
+        layout.journal_log.touch(exist_ok=True)
+
+    if "blocks" in folders:
+        _write_if_missing(layout.blocks_dir / "init.yaml", DEFAULT_INIT_BLOCK)
+    _write_if_missing(layout.phone_book_extra_file, DEFAULT_PHONE_BOOK_EXTRA)
     _write_if_missing(layout.scheduler_file, DEFAULT_SCHEDULER)
     _write_if_missing(layout.checkpoint_file, checkpoint_text)
-    _write_if_missing(layout.scripts_dir / "pre_commit.py", DEFAULT_PRE_COMMIT_SCRIPT)
+    if "scripts" in folders:
+        _write_if_missing(layout.scripts_dir / "pre_commit.py", DEFAULT_PRE_COMMIT_SCRIPT)
     sync_builtin_skills_home(layout.home)
     _cleanup_legacy_builtin_scripts(layout)
-    layout.events_log.touch(exist_ok=True)
-    layout.journal_log.touch(exist_ok=True)
     _install_git_hook(layout.home)
     _ensure_logs_ignored(layout.home)
 
