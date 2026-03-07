@@ -135,6 +135,8 @@ uv run pytest -q
 
 Agent file writes are limited to `state/` and `skills/`. Reads use repository scope. Built-in skills are read-only. This is intentionally simple and should not be treated as a security boundary.
 
+There is no sandboxing. Agents have full shell access. See [docs/sandboxing.md](docs/sandboxing.md) for why this is deliberate and what open-strix does instead.
+
 ## License
 
 MIT. See `LICENSE`.
