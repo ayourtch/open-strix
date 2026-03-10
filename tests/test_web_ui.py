@@ -103,7 +103,7 @@ async def test_local_web_send_and_react_round_trip(tmp_path: Path) -> None:
     )
     assert reacted is True
 
-    messages = strix.serialize_web_messages()
+    messages, _has_more = strix.serialize_web_messages()
     assert len(messages) == 1
     assert messages[0]["content"] == "agent reply"
     assert messages[0]["attachments"][0]["path"] == "state/summary.txt"

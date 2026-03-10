@@ -147,8 +147,25 @@ class WebChatMixin:
             "is_image": _is_inline_image(virtual_path),
         }
 
-    def serialize_web_messages(self) -> list[dict[str, Any]]:
+    def serialize_web_messages(
+        self,
+        *,
+        limit: int = 50,
+        before: str | None = None,
+    ) -> tuple[list[dict[str, Any]], bool]:
         rows = list(self.message_history_by_channel.get(self.config.web_ui_channel_id, []))
+        if before is not None:
+            before_index = next(
+                (idx for idx, row in enumerate(rows) if row.get("message_id") == before),
+                len(rows),
+            )
+            rows = rows[:before_index]
+
+        limit = max(limit, 0)
+        start_index = max(len(rows) - limit, 0)
+        has_more = start_index > 0
+        rows = rows[start_index:]
+
         serialized: list[dict[str, Any]] = []
         for row in rows:
             attachments = row.get("attachments")
@@ -171,7 +188,7 @@ class WebChatMixin:
                     "reactions": list(row.get("reactions", [])),
                 },
             )
-        return serialized
+        return serialized, has_more
 
     def resolve_web_shared_file(self, virtual_path: str) -> Path | None:
         normalized = virtual_path.lstrip("/").strip()
@@ -312,11 +329,11 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
         border-radius: 1.05rem;
         border: 1px solid var(--line);
         background: var(--user);
-        align-self: flex-start;
+        align-self: flex-end;
       }}
 
       .message.agent {{
-        align-self: flex-end;
+        align-self: flex-start;
         background: var(--agent);
       }}
 
@@ -330,9 +347,16 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
       }}
 
       .body {{
-        white-space: pre-wrap;
         line-height: 1.45;
       }}
+
+      .body code {{ background: rgba(30,36,48,0.07); padding: 0.15em 0.4em; border-radius: 0.3em; font-family: ui-monospace, 'SF Mono', Monaco, monospace; font-size: 0.9em; }}
+      .body pre {{ background: rgba(30,36,48,0.06); padding: 0.8rem 1rem; border-radius: 0.6rem; overflow-x: auto; font-family: ui-monospace, 'SF Mono', Monaco, monospace; font-size: 0.88em; line-height: 1.5; margin: 0.5rem 0; }}
+      .body pre code {{ background: none; padding: 0; font-size: inherit; }}
+      .body a {{ color: var(--accent); }}
+      .body p {{ margin: 0.4em 0; }}
+      .body p:first-child {{ margin-top: 0; }}
+      .body p:last-child {{ margin-bottom: 0; }}
 
       .attachments {{
         display: grid;
@@ -526,8 +550,12 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
       const sendEl = document.getElementById("send");
       const typingEl = document.getElementById("typing-indicator");
 
-      let lastSignature = "";
       let pastedFiles = [];
+      let knownIds = new Map();
+      let oldestLoadedId = null;
+      let hasMoreHistory = true;
+      let loadingHistory = false;
+      let isNearBottom = true;
 
       function formatTime(value) {{
         if (!value) return "";
@@ -549,99 +577,159 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
         }});
       }}
 
+      function simpleMarkdown(text) {{
+        if (!text) return '';
+        var s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        s = s.replace(/```(\\w*)\\n?([\\s\\S]*?)```/g, function(m, lang, code) {{ return '<pre><code>' + code + '</code></pre>'; }});
+        s = s.replace(/`([^`]+)`/g, '<code>$1</code>');
+        s = s.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+        s = s.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
+        s = s.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2" target="_blank" rel="noreferrer">$1</a>');
+        var parts = s.split(/<pre><code>[\\s\\S]*?<\\/code><\\/pre>/g);
+        var blocks = [];
+        s.replace(/<pre><code>[\\s\\S]*?<\\/code><\\/pre>/g, function(m) {{ blocks.push(m); return m; }});
+        var result = '';
+        for (var i = 0; i < parts.length; i++) {{
+          result += parts[i].replace(/\\n/g, '<br>');
+          if (i < blocks.length) result += blocks[i];
+        }}
+        return result;
+      }}
+
+      function createMessageElement(message) {{
+        const article = document.createElement("article");
+        article.className = `message ${{message.is_bot ? "agent" : "user"}}`;
+        article.dataset.messageId = message.message_id;
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        const author = document.createElement("strong");
+        author.textContent = message.is_bot ? AGENT_NAME : "You";
+        const time = document.createElement("span");
+        time.textContent = formatTime(message.timestamp);
+        meta.append(author, time);
+        article.appendChild(meta);
+
+        if (message.content) {{
+          const body = document.createElement("div");
+          body.className = "body";
+          body.innerHTML = simpleMarkdown(message.content);
+          article.appendChild(body);
+        }}
+
+        if (message.attachments && message.attachments.length) {{
+          const attachments = document.createElement("div");
+          attachments.className = "attachments";
+          message.attachments.forEach((attachment) => {{
+            if (attachment.is_image) {{
+              const link = document.createElement("a");
+              link.href = attachment.url;
+              link.target = "_blank";
+              link.rel = "noreferrer";
+
+              const image = document.createElement("img");
+              image.className = "image";
+              image.loading = "lazy";
+              image.src = attachment.url;
+              image.alt = attachment.name;
+              link.appendChild(image);
+              attachments.appendChild(link);
+            }}
+
+            const link = document.createElement("a");
+            link.className = "attachment-link";
+            link.href = attachment.url;
+            link.target = "_blank";
+            link.rel = "noreferrer";
+            link.textContent = attachment.name;
+            attachments.appendChild(link);
+          }});
+          article.appendChild(attachments);
+        }}
+
+        if (message.reactions && message.reactions.length) {{
+          const reactions = document.createElement("div");
+          reactions.className = "reactions";
+          message.reactions.forEach((emoji) => {{
+            const chip = document.createElement("span");
+            chip.className = "reaction";
+            chip.textContent = emoji;
+            reactions.appendChild(chip);
+          }});
+          article.appendChild(reactions);
+        }}
+
+        return article;
+      }}
+
       function renderMessages(payload) {{
-        const signature = JSON.stringify(payload.messages.map((message) => [
-          message.message_id,
-          message.content,
-          message.reactions,
-          message.attachments.map((attachment) => attachment.path),
-        ]));
         if (payload.is_processing) {{
           typingEl.innerHTML = '<span class="typing-dot"></span>' + AGENT_NAME + ' is thinking…';
         }} else {{
           typingEl.innerHTML = '';
         }}
 
-        if (signature === lastSignature) {{
-          return;
+        if (typeof payload.has_more !== 'undefined') {{
+          hasMoreHistory = payload.has_more;
         }}
-        lastSignature = signature;
 
-        messagesEl.innerHTML = "";
-        if (!payload.messages.length) {{
-          const empty = document.createElement("div");
-          empty.className = "empty";
-          empty.textContent = "No messages yet. Say something and open-strix will respond here.";
-          messagesEl.appendChild(empty);
+        const emptyEl = messagesEl.querySelector(".empty");
+        if (!payload.messages.length && knownIds.size === 0) {{
+          if (!emptyEl) {{
+            const empty = document.createElement("div");
+            empty.className = "empty";
+            empty.textContent = "No messages yet. Say something and open-strix will respond here.";
+            messagesEl.appendChild(empty);
+          }}
           return;
         }}
+        if (emptyEl) emptyEl.remove();
 
         payload.messages.forEach((message) => {{
-          const article = document.createElement("article");
-          article.className = `message ${{message.is_bot ? "agent" : "user"}}`;
-
-          const meta = document.createElement("div");
-          meta.className = "meta";
-          const author = document.createElement("strong");
-          author.textContent = message.is_bot ? AGENT_NAME : "You";
-          const time = document.createElement("span");
-          time.textContent = formatTime(message.timestamp);
-          meta.append(author, time);
-          article.appendChild(meta);
-
-          if (message.content) {{
-            const body = document.createElement("div");
-            body.className = "body";
-            body.textContent = message.content;
-            article.appendChild(body);
+          if (!knownIds.has(message.message_id)) {{
+            const el = createMessageElement(message);
+            knownIds.set(message.message_id, el);
+            messagesEl.appendChild(el);
           }}
-
-          if (message.attachments.length) {{
-            const attachments = document.createElement("div");
-            attachments.className = "attachments";
-            message.attachments.forEach((attachment) => {{
-              if (attachment.is_image) {{
-                const link = document.createElement("a");
-                link.href = attachment.url;
-                link.target = "_blank";
-                link.rel = "noreferrer";
-
-                const image = document.createElement("img");
-                image.className = "image";
-                image.loading = "lazy";
-                image.src = attachment.url;
-                image.alt = attachment.name;
-                link.appendChild(image);
-                attachments.appendChild(link);
-              }}
-
-              const link = document.createElement("a");
-              link.className = "attachment-link";
-              link.href = attachment.url;
-              link.target = "_blank";
-              link.rel = "noreferrer";
-              link.textContent = attachment.name;
-              attachments.appendChild(link);
-            }});
-            article.appendChild(attachments);
-          }}
-
-          if (message.reactions.length) {{
-            const reactions = document.createElement("div");
-            reactions.className = "reactions";
-            message.reactions.forEach((emoji) => {{
-              const chip = document.createElement("span");
-              chip.className = "reaction";
-              chip.textContent = emoji;
-              reactions.appendChild(chip);
-            }});
-            article.appendChild(reactions);
-          }}
-
-          messagesEl.appendChild(article);
         }});
 
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        if (payload.messages.length && !oldestLoadedId) {{
+          oldestLoadedId = payload.messages[0].message_id;
+        }}
+
+        if (isNearBottom) {{
+          messagesEl.scrollTop = messagesEl.scrollHeight;
+        }}
+      }}
+
+      async function loadHistory() {{
+        if (!oldestLoadedId || loadingHistory || !hasMoreHistory) return;
+        loadingHistory = true;
+        try {{
+          const prevHeight = messagesEl.scrollHeight;
+          const response = await fetch("/api/messages?limit=50&before=" + encodeURIComponent(oldestLoadedId), {{ cache: "no-store" }});
+          if (!response.ok) throw new Error("history fetch failed");
+          const payload = await response.json();
+          hasMoreHistory = payload.has_more;
+          const fragment = document.createDocumentFragment();
+          payload.messages.forEach((message) => {{
+            if (!knownIds.has(message.message_id)) {{
+              const el = createMessageElement(message);
+              knownIds.set(message.message_id, el);
+              fragment.appendChild(el);
+            }}
+          }});
+          if (fragment.childNodes.length) {{
+            messagesEl.insertBefore(fragment, messagesEl.firstChild);
+            messagesEl.scrollTop = messagesEl.scrollHeight - prevHeight;
+          }}
+          if (payload.messages.length) {{
+            oldestLoadedId = payload.messages[0].message_id;
+          }}
+        }} catch (error) {{
+          console.error("loadHistory error:", error);
+        }}
+        loadingHistory = false;
       }}
 
       async function refresh() {{
@@ -716,6 +804,20 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
       filesEl.addEventListener("change", updateFileList);
       composerEl.addEventListener("submit", sendMessage);
 
+      messagesEl.addEventListener("scroll", () => {{
+        isNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+        if (messagesEl.scrollTop < 150 && hasMoreHistory && !loadingHistory) {{
+          loadHistory();
+        }}
+      }});
+
+      messagesEl.addEventListener("scroll", () => {{
+        isNearBottom = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < 100;
+        if (messagesEl.scrollTop < 150 && hasMoreHistory && !loadingHistory) {{
+          loadHistory();
+        }}
+      }});
+
       refresh().then(() => {{ messagesEl.scrollTop = messagesEl.scrollHeight; }}).catch((error) => console.error(error));
       window.setInterval(() => {{
         refresh().catch((error) => console.error(error));
@@ -740,13 +842,23 @@ def _build_web_ui_app(strix: OpenStrixApp) -> web.Application:
     async def health(_: web.Request) -> web.Response:
         return web.json_response({"status": "ok", "channel_id": strix.config.web_ui_channel_id})
 
-    async def list_messages(_: web.Request) -> web.Response:
+    async def list_messages(request: web.Request) -> web.Response:
+        limit_text = request.query.get("limit", "50")
+        before = request.query.get("before")
+
+        try:
+            limit = int(limit_text)
+        except ValueError:
+            return web.json_response({"error": "limit must be an integer"}, status=400)
+
+        messages, has_more = strix.serialize_web_messages(limit=limit, before=before)
         return web.json_response(
             {
                 "agent_name": strix.home.name,
                 "channel_id": strix.config.web_ui_channel_id,
                 "is_processing": strix.current_channel_id == strix.config.web_ui_channel_id,
-                "messages": strix.serialize_web_messages(),
+                "messages": messages,
+                "has_more": has_more,
             },
         )
 
