@@ -26,14 +26,14 @@ You help users discover and install agent skills from the ecosystem. There are t
 
 ## Prerequisites
 
-Check what's installed:
+Both tools run via `npx` — no global install needed, just npm:
 
 ```bash
 # ClawHub CLI (primary discovery tool)
-which clawhub || echo "NOT INSTALLED — run: npm i -g clawhub"
+npx clawhub --help
 
 # Skillflag installer (for CLI-bundled skills)
-which skill-install || echo "Available via npx: npx skillflag install"
+npx skillflag --help
 ```
 
 ## Discovery — Finding Skills
@@ -44,17 +44,17 @@ ClawHub uses vector search (OpenAI embeddings), so natural language queries work
 
 ```bash
 # Search by description
-clawhub search "manage docker containers"
-clawhub search "git workflow automation"
+npx clawhub search "manage docker containers"
+npx clawhub search "git workflow automation"
 
 # Browse latest/trending
-clawhub explore                          # newest 25
-clawhub explore --sort trending          # trending now
-clawhub explore --sort downloads         # most popular
+npx clawhub explore                          # newest 25
+npx clawhub explore --sort trending          # trending now
+npx clawhub explore --sort downloads         # most popular
 
 # Machine-readable output
-clawhub explore --json
-clawhub search "kubernetes" --json
+npx clawhub explore --json
+npx clawhub search "kubernetes" --json
 ```
 
 ### 2. Skillflag Discovery (for CLI tools you already have)
@@ -92,9 +92,9 @@ Always evaluate before installing:
 
 ```bash
 # Inspect without installing (ClawHub)
-clawhub inspect <slug>                   # metadata + description
-clawhub inspect <slug> --files           # list all files in the skill
-clawhub inspect <slug> --file SKILL.md   # read the actual skill content
+npx clawhub inspect <slug>                   # metadata + description
+npx clawhub inspect <slug> --files           # list all files in the skill
+npx clawhub inspect <slug> --file SKILL.md   # read the actual skill content
 
 # Inspect a skillflag export
 <tool> --skill show <id>                 # read SKILL.md content
@@ -114,7 +114,7 @@ clawhub inspect <slug> --file SKILL.md   # read the actual skill content
 
 ```bash
 # Install to your skills directory
-clawhub install <slug> --workdir "$(pwd)" --dir skills
+npx clawhub install <slug> --workdir "$(pwd)" --dir skills
 ```
 
 ### From Skillflag CLI Tools
@@ -122,9 +122,6 @@ clawhub install <slug> --workdir "$(pwd)" --dir skills
 ```bash
 # Into a custom directory (open-strix agents)
 <tool> --skill export <id> | npx skillflag install --dest ./skills
-
-# Or manual extraction
-<tool> --skill export <id> | tar -x -C ./skills/
 ```
 
 ### From GitHub / Raw
@@ -170,10 +167,10 @@ Example: wrap `acpx` into a `coding` skill — SKILL.md teaches delegation behav
 
 ```bash
 # Login (GitHub OAuth)
-clawhub login
+npx clawhub login
 
 # Publish a skill directory
-clawhub publish ./skills/my-skill \
+npx clawhub publish ./skills/my-skill \
   --slug my-skill \
   --name "My Skill" \
   --version 1.0.0 \
