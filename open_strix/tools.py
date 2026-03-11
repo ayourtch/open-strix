@@ -411,7 +411,7 @@ class ToolsMixin:
                 attachment_names=attachment_names,
                 git_sync="deferred",
                 message_id=sent_message_id,
-                text_preview=text[:300],
+                text=text,
             )
             return "send_message complete (sent={sent}, chunks={chunks}, attachments={attachments}, git_sync=deferred)".format(
                 sent=sent,
@@ -602,7 +602,7 @@ class ToolsMixin:
                     tool=shell_tool_name,
                     error_type="timeout",
                     timeout_seconds=timeout_seconds,
-                    command_preview=normalized_command[:200],
+                    command=normalized_command,
                 )
                 if partial:
                     return f"{shell_tool_name} timed out after {timeout_seconds}s.\n{partial}"
@@ -621,7 +621,7 @@ class ToolsMixin:
                 tool=shell_tool_name,
                 exit_code=completed.returncode,
                 timeout_seconds=timeout_seconds,
-                command_preview=normalized_command[:200],
+                command=normalized_command,
             )
             return f"[exit_code={completed.returncode}]\n{combined}"
 
@@ -826,8 +826,8 @@ class ToolsMixin:
                 title = str(item.get("title", "")).strip()
                 url = str(item.get("url", "")).strip()
                 snippet = str(item.get("content", "")).strip()
-                if len(snippet) > 320:
-                    snippet = snippet[:320].rstrip() + "..."
+                if len(snippet) > 800:
+                    snippet = snippet[:800].rstrip() + "..."
                 compact_results.append(
                     {
                         "rank": idx,
@@ -942,7 +942,7 @@ class ToolsMixin:
                         "id": block["id"],
                         "name": block["name"],
                         "sort_order": block["sort_order"],
-                        "text_preview": str(block["text"])[:10],
+                        "text_preview": str(block["text"])[:80],
                     }
                     for block in blocks
                 ],
