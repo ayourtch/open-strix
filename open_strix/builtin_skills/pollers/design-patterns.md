@@ -127,28 +127,30 @@ text = (record.text[:300] + "...") if len(record.text) > 300 else record.text
 
 ## Error Handling
 
-Pollers run unattended. Failures should be silent (exit non-zero) rather than emitting garbage.
+Pollers run unattended. The key rule: **never emit on error.** A malformed event wastes an LLM call.
+
+**Don't wrap everything in try/except.** Let Python crash naturally. The scheduler captures stderr and logs non-zero exits as `poller_nonzero_exit`. An unhandled exception gives you the full traceback — line numbers, call stack, variable context. A `print(f"API call failed: {e}")` gives you almost nothing.
 
 ```python
 def main():
-    try:
-        client = create_client()
-    except Exception as e:
-        print(f"Auth failed: {e}", file=sys.stderr)
-        sys.exit(1)
+    client = create_client()  # Let it crash — traceback tells you why
+    response = client.fetch_notifications()
 
-    try:
-        response = client.fetch_notifications()
-    except Exception as e:
-        print(f"API call failed: {e}", file=sys.stderr)
-        sys.exit(1)
-
-    # Only reach emit() if everything succeeded
     for item in process(response):
         emit(item)
 ```
 
-**Never emit on error.** A malformed event wastes an LLM call. Exit non-zero instead — the scheduler logs it as `poller_nonzero_exit`.
+If you do need to catch an exception (e.g., to save cursor state before exiting), **always include the traceback:**
+
+```python
+import traceback
+
+try:
+    response = client.fetch_notifications()
+except Exception:
+    traceback.print_exc()  # Full traceback to stderr, not just the message
+    sys.exit(1)
+```
 
 ## Local Event Log
 
@@ -189,7 +191,8 @@ Keep all poller state in `STATE_DIR`. Don't write to random locations — it mak
 | Filtering on `is_read` | Changes when any client views the resource | Use your own cursor |
 | Emitting likes/follows | Agent can't act on these | Filter to actionable types |
 | Missing URI/CID in prompts | Agent can't reply or take action | Include identifiers |
-| No error handling | Malformed output wastes LLM calls | try/except + sys.exit(1) |
+| Wrapping everything in try/except | Swallows tracebacks, makes debugging impossible | Let it crash — stderr has the traceback |
+| `except Exception as e: print(e)` | Loses line numbers, call stack, context | Use `traceback.print_exc()` if you must catch |
 | Hardcoded paths | Breaks when moved or run by scheduler | Use STATE_DIR env var |
 | Writing state outside STATE_DIR | Hard to debug, breaks portability | Keep everything in STATE_DIR |
 | Forgetting `reload_pollers` | Poller exists but scheduler doesn't know about it | Always call after creating/updating pollers.json |
