@@ -1116,6 +1116,7 @@ class ToolsMixin:
             list_schedules,
             add_schedule,
             remove_schedule,
+            reload_pollers,
         ]
         if self.web_search_enabled:
             web_search.handle_tool_error = True
