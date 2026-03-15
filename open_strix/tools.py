@@ -1065,6 +1065,17 @@ class ToolsMixin:
             self.log_event("tool_call", tool="remove_schedule", name=name, removed=len(before) - len(after))
             return f"Removed {len(before) - len(after)} schedule(s) named '{name}'."
 
+        @tool("reload_pollers")
+        def reload_pollers() -> str:
+            """Reload all pollers from skills/*/pollers.json files. Call this after installing or updating a skill that includes pollers."""
+            self._reload_scheduler_jobs()
+            pollers = self._discover_pollers()
+            self.log_event("tool_call", tool="reload_pollers", count=len(pollers))
+            if not pollers:
+                return "Reloaded. No pollers found."
+            names = [p.name for p in pollers]
+            return f"Reloaded. {len(pollers)} poller(s) registered: {', '.join(names)}"
+
         @tool("lookup")
         def lookup(query: str) -> str:
             """Look up a Discord user or channel by name or ID.  Returns matching entries with their IDs, mention format, and type.  Use this when you need to find a channel_id or user mention format."""
