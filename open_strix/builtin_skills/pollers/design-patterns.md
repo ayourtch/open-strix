@@ -212,6 +212,37 @@ except Exception:
     sys.exit(1)
 ```
 
+## High-Frequency Pollers — Use Rust
+
+If a poller runs very frequently (every minute or more), write it in Rust instead of Python.
+
+The reason is memory, not speed. A Python poller spins up a VM on every invocation — interpreter, imported modules, garbage collector. For a poller that runs every 5 minutes, that overhead is negligible. For one that runs every 30 seconds, you're paying VM startup costs constantly and keeping memory pressure high across the system.
+
+Rust binaries have no runtime. A compiled poller starts, does its work, and exits. The memory footprint during execution is just the data it's processing. At high frequencies, this difference compounds — dozens of Python VM startups per hour vs. dozens of near-zero-overhead process launches.
+
+The poller contract is the same either way: read stdin/env, write JSONL to stdout, exit. The scheduler doesn't care what language produced the binary.
+
+```toml
+# pollers.json — Rust poller
+{
+  "my-fast-monitor": {
+    "command": "./monitor",
+    "cron": "*/1 * * * *",
+    "env": {}
+  }
+}
+```
+
+**When to reach for Rust:**
+- Polling interval ≤ 1 minute
+- System is memory-constrained (small VPS, shared host)
+- Poller is simple enough that Python's ecosystem advantages don't matter (most pollers are: fetch API, compare cursor, emit JSONL)
+
+**When Python is fine:**
+- Polling interval ≥ 5 minutes — VM startup cost is amortized
+- Complex API client libraries only available in Python
+- Rapid prototyping — get it working first, optimize later if frequency demands it
+
 ## Local Event Log
 
 Optionally write events to a local JSONL file for debugging and history. This is separate from stdout (which the scheduler reads).
@@ -258,4 +289,5 @@ Keep all poller state in `STATE_DIR`. Don't write to random locations — it mak
 | Writing state outside STATE_DIR | Hard to debug, breaks portability | Keep everything in STATE_DIR |
 | Emitting `"No new items"` to stdout | Wastes an LLM call on a non-event | Output nothing when there's nothing to report |
 | Extra fields beyond `prompt` | Scheduler ignores them — false sense of structure | Only `prompt` matters; use local event log for extras |
+| Python poller at ≤1min interval | VM startup overhead on every invocation, constant memory pressure | Write it in Rust — no runtime, near-zero overhead |
 | Forgetting `reload_pollers` | Poller exists but scheduler doesn't know about it | Always call after creating/updating pollers.json |
