@@ -2,6 +2,44 @@
 
 Practical patterns for writing reliable pollers. Read SKILL.md first for the basics.
 
+## Stdout Format — The Contract
+
+Each line of stdout must be a self-contained JSON object. The scheduler reads stdout line by line, parses each as JSON, and delivers the `prompt` field to the agent as an event.
+
+### Required Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `prompt` | string | The text delivered to the agent. This is the only field the scheduler reads. |
+
+### Optional Fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `poller` | string | Poller name. The scheduler ignores this (it uses the registered name from pollers.json), but it's useful in local event logs for filtering with jq. |
+
+### Example Output
+
+```
+{"poller": "bluesky-mentions", "prompt": "@user.bsky.social replied to your post: \"interesting take\"\nReply URI: at://did:plc:abc/app.bsky.feed.post/123 | CID: bafyabc"}
+{"poller": "bluesky-mentions", "prompt": "@other.bsky.social mentioned you: \"cc @you.bsky.social\"\nPost URI: at://did:plc:def/app.bsky.feed.post/456 | CID: bafydef"}
+```
+
+### What the Scheduler Does With It
+
+1. Reads stdout after the process exits (up to 200 lines)
+2. Splits on newlines, skips blanks
+3. Parses each line as JSON — invalid JSON is logged and skipped
+4. Extracts the `prompt` field (must be a non-empty string)
+5. Wraps it in an `AgentEvent(event_type="poller", prompt=..., scheduler_name=<registered name>)`
+6. Delivers to the agent's event queue
+
+Lines without a `prompt` field (or with an empty one) are silently dropped. No error, no event — just gone.
+
+### Silence = Nothing to Report
+
+If the poller has nothing actionable, output nothing to stdout. Zero lines = zero events. Don't emit `{"poller": "x", "prompt": "No new items"}` — that wastes an LLM call to process a non-event.
+
 ## State Management
 
 Pollers are stateless processes that run on a cron schedule. Between runs, they need to remember what they've already seen. This is entirely the poller's responsibility — the scheduler doesn't track state for you.
@@ -218,4 +256,6 @@ Keep all poller state in `STATE_DIR`. Don't write to random locations — it mak
 | `except Exception as e: print(e)` | Loses line numbers, call stack, context | Use `traceback.print_exc()` if you must catch |
 | Hardcoded paths | Breaks when moved or run by scheduler | Use STATE_DIR env var |
 | Writing state outside STATE_DIR | Hard to debug, breaks portability | Keep everything in STATE_DIR |
+| Emitting `"No new items"` to stdout | Wastes an LLM call on a non-event | Output nothing when there's nothing to report |
+| Extra fields beyond `prompt` | Scheduler ignores them — false sense of structure | Only `prompt` matters; use local event log for extras |
 | Forgetting `reload_pollers` | Poller exists but scheduler doesn't know about it | Always call after creating/updating pollers.json |
