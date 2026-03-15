@@ -99,6 +99,20 @@ if last_seen and notif.indexed_at <= last_seen:
     continue
 ```
 
+## Notification Noise — Pain Adds Up
+
+Every event you emit costs an LLM call. That's real money and real latency. But the deeper problem is **pain** — not yours, the agent's operator.
+
+A poller that fires on likes, follows, and reposts doesn't just waste tokens. It trains the operator to ignore poller output. After the 50th "someone liked your post" notification they didn't ask for, they stop reading any of them — including the reply that actually needed a response.
+
+This is the same dynamic as alert fatigue in ops. Too many pages and the on-call stops responding. The fix isn't better alert routing, it's fewer alerts.
+
+**Concrete rules:**
+- Only emit events the agent can meaningfully act on (reply, investigate, escalate)
+- "Someone liked your post" is never actionable — don't emit it
+- If you're unsure whether a notification type is actionable, leave it out. You can always add it later; you can't un-annoy the operator.
+- Measure: if >50% of your emitted events result in no agent action, your filter is too loose
+
 ## Prompt Quality
 
 The `prompt` field is what the agent sees. Make it actionable.
@@ -117,13 +131,21 @@ prompt += f"\nOriginal post URI: {notif.reason_subject}"
 prompt = f"@{handle} replied: {text}"
 ```
 
-### Truncate Thoughtfully
+### Don't Truncate
 
-Long text should be truncated, but include enough for the agent to understand context.
+The urge to truncate comes from traditional apps with noisy neighbor problems — one user's data shouldn't crowd out another's. Pollers don't have this problem. Your context window is large and the data you're emitting is the signal the agent needs to act on.
+
+Truncated text loses context that an LLM would use. A 300-character snippet of a reply thread strips the setup that makes the reply make sense. The agent doesn't degrade gracefully — it confidently misinterprets what's left.
 
 ```python
+# Bad — solving a problem you don't have
 text = (record.text[:300] + "...") if len(record.text) > 300 else record.text
+
+# Good — just include the text
+prompt = f'@{handle} replied: "{record.text}"'
 ```
+
+If context size is genuinely a concern, the right fix is filtering at the source (emit fewer events), not trimming the content of each event. Dropping entire low-value notifications preserves full context on the ones that matter.
 
 ## Error Handling
 
@@ -189,7 +211,8 @@ Keep all poller state in `STATE_DIR`. Don't write to random locations — it mak
 |---|---|---|
 | URI-based cursors | URIs can be deleted or reordered | Use timestamps |
 | Filtering on `is_read` | Changes when any client views the resource | Use your own cursor |
-| Emitting likes/follows | Agent can't act on these | Filter to actionable types |
+| Emitting likes/follows | Agent can't act on these, trains operator to ignore output | Filter to actionable types |
+| Truncating event text | LLM confidently misinterprets partial context | Include full text, filter at the source instead |
 | Missing URI/CID in prompts | Agent can't reply or take action | Include identifiers |
 | Wrapping everything in try/except | Swallows tracebacks, makes debugging impossible | Let it crash — stderr has the traceback |
 | `except Exception as e: print(e)` | Loses line numbers, call stack, context | Use `traceback.print_exc()` if you must catch |
