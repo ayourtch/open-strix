@@ -1,6 +1,6 @@
 ---
 name: pollers
-description: Create and manage pollers — lightweight monitoring scripts that check external services on a schedule. Use when the user wants to monitor something (Bluesky, GitHub, RSS, APIs), create a new poller, debug why a poller isn't firing, or manage pollers.json files in skills. Do not use for one-off checks or for scheduled jobs that don't involve external services.
+description: Create and manage pollers — lightweight monitoring scripts that check external services on a schedule. Use when the user wants to monitor something (Bluesky, GitHub, RSS, APIs), create a new poller, debug why a poller isn't firing, or manage pollers.json files in skills.
 ---
 
 # Pollers — Event-Driven Monitoring
