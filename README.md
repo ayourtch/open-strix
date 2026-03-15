@@ -152,6 +152,18 @@ The setup command handles everything: directory structure, git init, GitHub repo
 
 See [SETUP.md](SETUP.md) for detailed instructions on environment variables, model configuration, Discord setup, and deployment options.
 
+## Upgrading
+
+```bash
+uv add -U open-strix
+```
+
+Or with pip:
+
+```bash
+pip install -U open-strix
+```
+
 ## Configuration
 
 `config.yaml`:
