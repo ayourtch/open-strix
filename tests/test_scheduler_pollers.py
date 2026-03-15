@@ -214,7 +214,8 @@ class TestOnPollerFire:
         await app._on_poller_fire(poller)
 
         assert len(app.enqueued) == 0
-        assert any(e["type"] == "poller_no_output" for e in app.events)
+        # Silent when no output — no log noise for routine empty polls
+        assert not any(e["type"] == "poller_no_output" for e in app.events)
 
     @pytest.mark.asyncio
     async def test_poller_nonzero_exit(self, tmp_home: Path) -> None:

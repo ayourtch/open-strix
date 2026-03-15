@@ -242,8 +242,6 @@ class SchedulerMixin:
         env["STATE_DIR"] = str(poller.skill_dir)
         env["POLLER_NAME"] = poller.name
 
-        self.log_event("poller_start", name=poller.name, command=poller.command)
-
         try:
             proc = await asyncio.create_subprocess_shell(
                 poller.command,
@@ -293,7 +291,6 @@ class SchedulerMixin:
 
         stdout_text = stdout_bytes.decode("utf-8", errors="replace").strip()
         if not stdout_text:
-            self.log_event("poller_no_output", name=poller.name)
             return
 
         event_count = 0
