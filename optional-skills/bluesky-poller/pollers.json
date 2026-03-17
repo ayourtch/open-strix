@@ -1,0 +1,9 @@
+{
+  "pollers": [
+    {
+      "name": "bluesky-mentions",
+      "command": "python poller.py",
+      "cron": "*/5 * * * *"
+    }
+  ]
+}
