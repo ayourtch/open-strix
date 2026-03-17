@@ -364,33 +364,31 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
       }}
 
       .copy-raw {{
-        max-width: 0;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 1.8rem;
+        width: 1.8rem;
+        height: 1.8rem;
         padding: 0;
-        border: 0 solid transparent;
+        border: 1px solid transparent;
+        border-radius: 0.55rem;
+        appearance: none;
         background: transparent;
         color: var(--muted);
-        font-size: 0.76rem;
-        white-space: nowrap;
-        opacity: 0;
-        overflow: hidden;
-        pointer-events: none;
+        cursor: pointer;
+        line-height: 0;
         transition:
-          max-width 140ms ease,
-          opacity 140ms ease,
           color 140ms ease,
-          padding 140ms ease,
           background-color 140ms ease,
           border-color 140ms ease;
       }}
 
-      .message:hover .copy-raw,
-      .message:focus-within .copy-raw,
-      .copy-raw.copied {{
-        max-width: 5.5rem;
-        padding: 0.18rem 0.55rem;
-        border-width: 1px;
-        opacity: 1;
-        pointer-events: auto;
+      .copy-raw svg {{
+        width: 0.95rem;
+        height: 0.95rem;
+        display: block;
+        flex: 0 0 auto;
       }}
 
       .copy-raw:hover,
@@ -679,12 +677,29 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
       const originalTitle = document.title;
       const unreadTitle = "💬 New message";
       const notificationSoundDataUri = createNotificationSoundDataUri();
+      const COPY_ICON_SVG = `
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <rect x="5" y="3" width="8" height="10" rx="1.5"></rect>
+          <path d="M3.75 11.5h-1A1.75 1.75 0 0 1 1 9.75v-7.5A1.75 1.75 0 0 1 2.75.5h5.5A1.75 1.75 0 0 1 10 2.25v.5"></path>
+        </svg>`;
+      const CHECK_ICON_SVG = `
+        <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">
+          <path d="M3.5 8.5 6.5 11.5 12.5 4.5"></path>
+        </svg>`;
 
       function formatTime(value) {{
         if (!value) return "";
         const dt = new Date(value);
         if (Number.isNaN(dt.getTime())) return value;
         return dt.toLocaleTimeString([], {{ hour: "numeric", minute: "2-digit" }});
+      }}
+
+      function setCopyButtonState(button, isCopied) {{
+        button.innerHTML = isCopied ? CHECK_ICON_SVG : COPY_ICON_SVG;
+        button.classList.toggle("copied", isCopied);
+        const label = isCopied ? "Copied!" : "Copy raw markdown";
+        button.setAttribute("aria-label", label);
+        button.title = label;
       }}
 
       // Build a short inline WAV so the page stays self-contained.
@@ -840,23 +855,19 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
         const copyButton = document.createElement("button");
         copyButton.type = "button";
         copyButton.className = "copy-raw";
-        copyButton.textContent = "Copy raw";
-        copyButton.setAttribute("aria-label", "Copy raw markdown");
+        setCopyButtonState(copyButton, false);
         let copyResetTimer = 0;
         copyButton.addEventListener("click", async () => {{
           try {{
             await navigator.clipboard.writeText(article.dataset.rawContent || "");
-            copyButton.textContent = "Copied!";
-            copyButton.classList.add("copied");
           }} catch (error) {{
             console.error("copy raw failed:", error);
-            copyButton.textContent = "Copy failed";
-            copyButton.classList.add("copied");
+            return;
           }}
+          setCopyButtonState(copyButton, true);
           window.clearTimeout(copyResetTimer);
           copyResetTimer = window.setTimeout(() => {{
-            copyButton.textContent = "Copy raw";
-            copyButton.classList.remove("copied");
+            setCopyButtonState(copyButton, false);
           }}, 1500);
         }});
         metaActions.append(time, copyButton);
