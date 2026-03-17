@@ -1,0 +1,4 @@
+# Poller runtime state (managed by the script)
+cursor.json
+follows_cache.json
+events.jsonl
