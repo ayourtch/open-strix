@@ -76,8 +76,16 @@ open-strix ships with skills that teach the agent how to operate:
 | **skill-acquisition** | Full lifecycle: discover from ClawHub/skillflag/GitHub, evaluate, install, wrap, publish |
 | **prediction-review** | Calibration loops — revisit predictions against ground truth, track accuracy |
 | **introspection** | Self-diagnosis from event logs — debugging, communication analysis, pattern detection |
+| **pollers** | Create and manage pollers — lightweight scripts for external awareness |
 
 Built-in skills are read-only and synced from the open-strix package. They live in `.open_strix_builtin_skills/` (gitignored) and are refreshed on every startup.
+
+Service-specific pollers are available from [ClawHub](https://clawhub.ai):
+
+| Skill | What it does |
+|-------|-------------|
+| **bluesky-poller** | Bluesky notification poller with follow-gate trust tiers and cursor-based dedup |
+| **github-poller** | GitHub repo poller for issues, PRs, comments, and reviews with self-filtering |
 
 ### Disabling builtins
 

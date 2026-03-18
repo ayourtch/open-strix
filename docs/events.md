@@ -368,10 +368,10 @@ web_ui_channel_id: local-web
 
 ### Use Cases
 
-- **Bluesky pollers** — external script monitors notifications, sends relevant ones to the agent via API
+- **Pollers** — the built-in pollers skill defines the contract for external awareness scripts. Install service-specific pollers from [ClawHub](https://clawhub.ai) (e.g., `bluesky-poller`, `github-poller`) or write your own.
 - **CI/CD hooks** — trigger agent review on pull requests
 - **Cross-agent communication** — one agent sends events to another
-- **Monitoring alerts** — external systems notify the agent of issues
+- **External alerts** — external systems notify the agent of issues
 
 ## Session Logs
 

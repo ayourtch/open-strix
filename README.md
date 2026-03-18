@@ -85,6 +85,7 @@ open-strix ships with built-in skills that teach the agent how to operate:
 | **skill-acquisition** | Discover and install skills from [ClawHub](https://clawhub.ai), [skillflag](https://agentskills.io)-compliant CLIs, and GitHub |
 | **prediction-review** | Calibration loops — revisit past predictions against ground truth |
 | **introspection** | Self-diagnosis from event logs and behavioral patterns |
+| **pollers** | Create and manage pollers — lightweight scripts for external awareness |
 
 The agent can also discover and install skills from the ecosystem at runtime. The built-in **skill-acquisition** skill teaches it how to search [ClawHub](https://clawhub.ai) (a public registry with 64K+ archived skills), install from skillflag-compliant CLI tools, and wrap external skills for its own use. See [docs/skills.md](docs/skills.md) for the full extensibility model.
 
@@ -101,6 +102,19 @@ disable_builtin_skills:
 The agent has tools to create, modify, and remove its own scheduled jobs. Jobs are cron expressions stored in `scheduler.yaml`. When a job fires, it sends a prompt to the agent — even if no human is around.
 
 This is how agents develop autonomy: scheduled check-ins, maintenance routines, periodic scanning. The agent decides what to schedule based on what it learns about you.
+
+### External Awareness (Pollers)
+
+Pollers are lightweight scripts that watch external services on a schedule and surface actionable signals. They live inside skills as `pollers.json` files and are discovered automatically by the scheduler.
+
+The built-in **pollers** skill teaches the agent the contract and design patterns. Service-specific pollers are available from [ClawHub](https://clawhub.ai):
+
+```bash
+npx clawhub install bluesky-poller   # Bluesky notifications with follow-gate trust tiers
+npx clawhub install github-poller    # GitHub issues, PRs, comments, reviews
+```
+
+All pollers follow the same contract: run on a cron schedule, output JSONL to stdout when there's something actionable, stay silent when there isn't. Writing your own is straightforward — see the built-in **pollers** skill for the full contract and design patterns.
 
 ### Events API
 
