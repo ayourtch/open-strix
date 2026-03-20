@@ -156,16 +156,29 @@ def create_climber_agent(
     and shell execution. Skills are inherited from the parent agent —
     if the operator has a coding agent configured, the climber gets it
     too. No memory blocks, just tools and a system prompt.
+
+    Law 4 enforcement: The backend uses WriteGuardBackend to restrict
+    writes to workspace/ only. The agent can READ program.md, config.json,
+    eval/, and logs/ but can only MODIFY files in workspace/. This is
+    architectural enforcement — "don't give them the lock" — not prompt-
+    level enforcement ("please don't modify eval files").
     """
     from deepagents import create_deep_agent
-    from deepagents.backends import FilesystemBackend
     from langchain.chat_models import init_chat_model
+
+    # Import WriteGuardBackend from open_strix — same pattern used by
+    # the main agent for writable_dirs enforcement
+    from open_strix.app import WriteGuardBackend
 
     model = init_chat_model(model_name)
 
-    # Backend scoped to the climb directory — the agent can only
-    # see and modify files within the climb's workspace
-    backend = FilesystemBackend(root_dir=climb_dir)
+    # Backend: read everything in climb_dir, write only to workspace/
+    # This is Law 4 by architecture — the climber literally cannot modify
+    # eval files, program.md, or config.json through its tools.
+    backend = WriteGuardBackend(
+        root_dir=climb_dir,
+        writable_dirs=["workspace"],
+    )
 
     system_prompt = (
         "You are a hill-climbing optimizer. Your job is to propose ONE small, "
@@ -175,7 +188,6 @@ def create_climber_agent(
         "Rules:\n"
         "- Make exactly ONE change per iteration\n"
         "- Only modify files in the workspace/ directory\n"
-        "- Do NOT modify files in eval/ or program.md\n"
         "- Read the recent results log to understand what's been tried\n"
         "- Base your proposal on patterns in the results — informed search, not random changes\n"
         "- After making a change, report what you changed and why\n"
