@@ -104,13 +104,17 @@ class LoggingWriteGuardBackend:
         self._log_read_tool("ls", path=path)
         return await self._inner.als_info(path)
 
-    def grep_raw(self, pattern: str, **kwargs) -> dict:
-        self._log_read_tool("grep", pattern=pattern, **kwargs)
-        return self._inner.grep_raw(pattern, **kwargs)
+    def grep_raw(
+        self, pattern: str, path: str | None = None, glob: str | None = None,
+    ) -> list | str:
+        self._log_read_tool("grep", pattern=pattern, path=path, glob=glob)
+        return self._inner.grep_raw(pattern, path, glob)
 
-    async def agrep_raw(self, pattern: str, **kwargs) -> dict:
-        self._log_read_tool("grep", pattern=pattern, **kwargs)
-        return await self._inner.agrep_raw(pattern, **kwargs)
+    async def agrep_raw(
+        self, pattern: str, path: str | None = None, glob: str | None = None,
+    ) -> list | str:
+        self._log_read_tool("grep", pattern=pattern, path=path, glob=glob)
+        return await self._inner.agrep_raw(pattern, path, glob)
 
     def glob_info(self, pattern: str, path: str = "/") -> list:
         self._log_read_tool("glob", pattern=pattern, path=path)
