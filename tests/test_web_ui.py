@@ -36,6 +36,7 @@ class DummyStrix(DiscordMixin, WebChatMixin):
         self.message_history_by_channel = defaultdict(lambda: deque(maxlen=250))
         self._current_turn_sent_messages: list[tuple[str, str]] | None = []
         self.current_channel_id: str | None = None
+        self.current_event_label: str | None = None
         self.discord_client = None
         self.logged: list[dict[str, object]] = []
         self.enqueued: list[AgentEvent] = []

@@ -976,7 +976,8 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
 
       function renderMessages(payload) {{
         if (payload.is_processing) {{
-          typingEl.innerHTML = '<span class="typing-dot"></span>' + AGENT_NAME + ' is thinking…';
+          const label = payload.processing_label ? ' (' + payload.processing_label + ')' : '';
+          typingEl.innerHTML = '<span class="typing-dot"></span>' + AGENT_NAME + ' is thinking…' + label;
         }} else {{
           typingEl.innerHTML = '';
         }}
@@ -1187,7 +1188,8 @@ def _build_web_ui_app(strix: OpenStrixApp) -> web.Application:
             {
                 "agent_name": _web_agent_name(strix),
                 "channel_id": strix.config.web_ui_channel_id,
-                "is_processing": strix.current_channel_id == strix.config.web_ui_channel_id,
+                "is_processing": strix.current_event_label is not None,
+                "processing_label": strix.current_event_label,
                 "messages": messages,
                 "has_more": has_more,
             },

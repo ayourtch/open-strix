@@ -341,6 +341,7 @@ class OpenStrixApp(DiscordMixin, SchedulerMixin, ToolsMixin, WebChatMixin):
         self.scheduler = AsyncIOScheduler(timezone=UTC)
         self.pending_scheduler_keys: set[str] = set()
         self.current_channel_id: str | None = None
+        self.current_event_label: str | None = None
         self.session_id = f"{datetime.now(tz=UTC).strftime('%Y%m%dT%H%M%SZ')}-{uuid4().hex[:8]}"
 
         self.message_history_all: deque[dict[str, Any]] = deque(maxlen=500)
@@ -714,6 +715,7 @@ class OpenStrixApp(DiscordMixin, SchedulerMixin, ToolsMixin, WebChatMixin):
         while True:
             event = await self.queue.get()
             self.current_channel_id = event.channel_id
+            self.current_event_label = event.scheduler_name or event.event_type
             try:
                 await self._process_event(event)
             except SendMessageCircuitBreakerStop as exc:
@@ -750,6 +752,7 @@ class OpenStrixApp(DiscordMixin, SchedulerMixin, ToolsMixin, WebChatMixin):
                 if event.dedupe_key:
                     self.pending_scheduler_keys.discard(event.dedupe_key)
                 self.current_channel_id = None
+                self.current_event_label = None
                 self.queue.task_done()
 
     async def _send_local_web_error_message(self, event: AgentEvent, exc: Exception) -> bool:
