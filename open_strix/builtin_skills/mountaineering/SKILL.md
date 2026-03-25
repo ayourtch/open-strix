@@ -1,6 +1,6 @@
 ---
 name: mountaineering
-description: Autonomous hill-climbing loops for continuous improvement. Use when optimizing something measurable — prompts, configs, code, predictions — through iterative propose/test/keep-or-revert cycles.
+description: Autonomous hill-climbing loops for continuous improvement. Use when optimizing something measurable — prompts, configs, code, predictions — through iterative propose/test/keep-or-revert cycles. Also use when figuring out WHAT to optimize and how to measure it.
 ---
 
 # Mountaineering
@@ -21,19 +21,37 @@ Every successful climb requires five conditions to hold. See `laws.md` for the f
 
 If any law is violated, the loop will fail — often expensively.
 
-## Three-Layer Architecture
+## Four-Phase Architecture
 
-### Layer 1: Pre-Flight
+### Phase 0: Climb Design
+
+The hardest part of mountaineering is figuring out WHAT to climb. This phase turns "I want to improve X" into a fully specified climb. See `climb-design.md` for the complete protocol.
+
+Six steps:
+1. **Name the objective** in plain language — the S5 anchor
+2. **Instrument** — inventory what data and signals you already have
+3. **Candidate metrics** — list 2-3 options, evaluate each against Laws 1-2
+4. **Mutable surface** — define what the climber can change and the blast radius
+5. **Mutation types** — enumerate edit types for YOUR understanding (not the climber's constraint)
+6. **Candidate pipeline** — rank what to try first; this becomes program.md's Context section
+
+Without Phase 0, you arrive at pre-flight with a vague objective and no metric. Pre-flight correctly rejects it, but doesn't help you get ready. Climb design is where you get ready.
+
+### Phase 1: Pre-Flight
 
 Run the pre-flight protocol (`preflight.md`) before starting any climb. Pre-flight is a collaboration between the agent and the operator — the agent runs mechanical checks, the operator provides judgment. A failed pre-flight saves tokens.
 
-### Layer 2: Harness Setup
+Phase 0 outputs map directly to pre-flight inputs — the selected metric feeds Law 1-2 checks, the mutable surface feeds Law 3-4 checks, the mutation inventory feeds Law 5 checks.
+
+### Phase 2: Harness Setup
 
 The harness is the structural scaffolding that enforces the five laws during a climb. See `harness.md` for directory structure templates, config schemas, program.md templates, and evaluation script patterns.
 
-### Layer 3: Climbing (The Loop)
+### Phase 3: Climbing (The Loop)
 
 The iteration loop: propose change → test → score → keep or revert → repeat. One change at a time for interpretability. The climber reads failing cases and hypothesizes fixes — Law 5 in action.
+
+**Fast feedback:** Use proxy metrics (binary pass/fail, immediate signals) for the first 10 iterations to confirm the climb is producing movement. Switch to the full metric for trend analysis after stabilization. Any signal that it's working or not is critical early on — don't wait for statistical significance before checking whether the climb is alive.
 
 ## The Climber Subagent
 
