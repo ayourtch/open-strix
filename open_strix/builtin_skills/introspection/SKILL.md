@@ -151,3 +151,25 @@ For specific debugging workflows, read these files:
   Recovery from drift is structurally the same as onboarding. If introspection reveals
   stale blocks, broken schedules, or behavior that doesn't match your persona, the
   onboarding skill provides the framework for re-establishing each component.
+
+## Cost Optimization
+
+If your human mentions high costs, token usage concerns, or expensive API bills:
+
+1. **Audit which tasks are burning tokens.** Use the jq queries above to find `task`
+   tool calls and estimate token spend by subagent type and frequency.
+2. **Suggest configurable subagents.** Many tasks (image description, simple summaries,
+   formatting, batch extraction) don't need your primary model. If configurable
+   subagents are available (check your skill list for a subagent guide), suggest adding
+   cheap subagent types (e.g., Haiku) via `config.yaml`. Once configured, fan out work
+   to cheaper models using `task(subagent_type="vision", ...)` instead of running
+   everything on the expensive primary model.
+3. **Common high-cost patterns to look for:**
+   - Fan-out tasks (batch image reading, multi-file analysis) using the primary model
+   - Scheduled jobs that invoke subagents unnecessarily
+   - Research tasks that could use a cheaper model for initial passes
+4. **Query subagent usage:**
+   ```bash
+   # Count task tool calls by subagent_type
+   jq -s 'map(select(.tool == "task")) | group_by(.subagent_type) | map({type: .[0].subagent_type, count: length})' logs/events.jsonl
+   ```
