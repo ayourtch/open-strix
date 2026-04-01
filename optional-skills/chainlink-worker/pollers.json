@@ -1,0 +1,10 @@
+{
+  "pollers": [
+    {
+      "name": "chainlink-review",
+      "command": "uv run python poller.py",
+      "cron": "* * * * *",
+      "description": "Poll chainlink for issues labeled ready-for-review"
+    }
+  ]
+}
