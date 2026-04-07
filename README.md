@@ -11,7 +11,7 @@ uv run open-strix
 
 Three commands. You have an agent. Open `http://localhost:8084` and start talking.
 
-> **No Discord?** No problem. The built-in web UI works out of the box — just set `web_ui_port: 8084` in `config.yaml`. Discord is optional. See [Local Web UI](#local-web-ui-no-discord-required).
+> **No Discord?** No problem. The built-in web UI is enabled by default. Discord is optional. See [Local Web UI](#local-web-ui-no-discord-required).
 
 ## What is this?
 
@@ -124,14 +124,7 @@ When `api_port` is set in `config.yaml`, a loopback REST API accepts events from
 
 ### Local Web UI (no Discord required)
 
-**Don't want to set up Discord? You don't have to.** The built-in web UI is the fastest way to start talking to your agent — no bot token, no server, no permissions fiddling. Just add two lines to `config.yaml`:
-
-```yaml
-web_ui_port: 8084
-web_ui_host: 127.0.0.1
-```
-
-Start the agent and open `http://127.0.0.1:8084/` in your browser. That's it. You're chatting.
+**Don't want to set up Discord? You don't have to.** The built-in web UI is enabled by default — no bot token, no server, no permissions fiddling. Start the agent and open `http://127.0.0.1:8084/` in your browser. That's it. You're chatting.
 
 The web UI supports text, images, and file attachments. It uses the same `send_message` tool as Discord, so the agent doesn't need any special configuration — everything works the same way. Scheduled jobs, memory, skills, journal entries — all of it runs identically whether you're on Discord or the web UI.
 
@@ -160,9 +153,9 @@ cd my-agent
 uv run open-strix
 ```
 
-The setup command handles everything: directory structure, git init, GitHub repo creation (with `--github`), service files for your OS, and a walkthrough for model/Discord configuration.
+The setup command handles everything: directory structure, git init, GitHub repo creation (with `--github` — works with or without the `gh` CLI), service files for your OS, and a walkthrough for model/Discord configuration.
 
-**Quickest path to a working agent:** Set your model API key in `.env`, set `web_ui_port: 8084` in `config.yaml`, run it, and open the browser. No Discord setup needed. Add Discord later if you want scheduled jobs to reach you when you're not at the keyboard.
+**Quickest path to a working agent:** Set your model API key in `.env`, run it, and open `http://localhost:8084` in the browser. The web UI is enabled by default — no Discord setup needed. Add Discord later if you want scheduled jobs to reach you when you're not at the keyboard.
 
 See [SETUP.md](SETUP.md) for detailed instructions on environment variables, model configuration, Discord setup, and deployment options.
 
@@ -190,7 +183,7 @@ discord_messages_in_prompt: 10
 discord_token_env: DISCORD_TOKEN
 always_respond_bot_ids: []
 api_port: 0
-web_ui_port: 0
+web_ui_port: 8084
 web_ui_host: 127.0.0.1
 web_ui_channel_id: local-web
 ```

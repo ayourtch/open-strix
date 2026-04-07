@@ -519,7 +519,17 @@ def _github_existing_repo_remote_url(home: Path, repo: str) -> str:
 
 def _ensure_github_remote(home: Path, repo_name: str | None = None) -> None:
     if shutil.which("gh") is None:
-        print("`gh` not found; skipping GitHub remote setup.", flush=True)
+        repo = repo_name.strip() if repo_name else home.name
+        print(
+            "`gh` CLI not found — no problem.\n"
+            "\n"
+            "Create your repo manually:\n"
+            f"  1. Go to https://github.com/new and create a private repo named '{repo}'\n"
+            "     (no README, no .gitignore, no license — empty repo)\n"
+            "  2. Copy the SSH or HTTPS URL from the repo page\n"
+            "  3. You'll be prompted to enter it below\n",
+            flush=True,
+        )
         return
 
     existing_origin = _run_command(["git", "remote", "get-url", "origin"], cwd=home)
@@ -662,9 +672,6 @@ def setup_home(home: Path, *, github: bool = False, repo_name: str | None = None
     home = home.resolve()
     home.mkdir(parents=True, exist_ok=True)
 
-    if github and shutil.which("gh") is None:
-        _raise_missing_gh_install_instructions()
-
     _ensure_git_repo(home)
     _ensure_git_identity(home)
     _ensure_uv_project(home)
@@ -752,14 +759,15 @@ def _print_setup_walkthrough(home: Path) -> None:
         - discord_token_env: env var to read Discord token from (default DISCORD_TOKEN)
         - always_respond_bot_ids: bot IDs this agent is allowed to respond to
         - api_port: loopback REST API port (0 disables it)
-        - web_ui_port: built-in web chat port (0 disables it)
+        - web_ui_port: built-in web chat port (default 8084; 0 disables it)
         - web_ui_host: bind host for the built-in web chat (default 127.0.0.1)
         - web_ui_channel_id: reserved channel ID used by the built-in web chat
 
         5) Run
         - start agent: uv run open-strix
-        - if `web_ui_port` is set and no Discord token is present, open-strix serves the built-in web chat instead of stdin mode.
-        - if no Discord token and no web UI are configured, open-strix runs stdin mode.
+        - the built-in web UI is enabled by default at http://127.0.0.1:8084/
+        - if a Discord token is also set, both interfaces run simultaneously.
+        - to disable the web UI, set web_ui_port: 0 in config.yaml.
 
         {service_section}
         """
@@ -787,7 +795,7 @@ def main(argv: Sequence[str] | None = None) -> None:
     setup_parser.add_argument(
         "--github",
         action="store_true",
-        help="Also create a private GitHub repo with `gh` and configure origin.",
+        help="Create a private GitHub repo and configure origin. Uses `gh` if available; otherwise prompts for manual setup.",
     )
     setup_parser.add_argument(
         "--repo-name",

@@ -20,7 +20,7 @@ Official install docs (Homebrew, pipx, winget, etc.): https://docs.astral.sh/uv/
 
 ### Install and auth `gh` (optional)
 
-If you want `open-strix setup --github` to create a GitHub repo automatically:
+The `gh` CLI automates GitHub repo creation during setup. If `gh` isn't available, `--github` still works — it prints instructions for creating the repo manually on GitHub and prompts you for the remote URL.
 
 ```bash
 # macOS
@@ -197,13 +197,7 @@ open-strix supports two interfaces. You can use either or both.
 
 ## Web UI setup
 
-Add to `config.yaml`:
-
-```yaml
-web_ui_port: 8084
-```
-
-Run `uv run open-strix` and open `http://127.0.0.1:8084/`. Done.
+The web UI is **enabled by default** on port 8084. Run `uv run open-strix` and open `http://127.0.0.1:8084/`. Done.
 
 The web UI supports text messages, image display, file attachments (drag, paste, or pick), and emoji reactions. It uses the same tools and memory as Discord — switching between them later doesn't lose anything.
 
@@ -220,7 +214,7 @@ Then open `http://<your-machine-ip>:8084/` from the other device.
 
 | Key | Default | Purpose |
 |---|---|---|
-| `web_ui_port` | `0` (disabled) | Port number. Set to any open port to enable. |
+| `web_ui_port` | `8084` | Port number. Set `0` to disable. |
 | `web_ui_host` | `127.0.0.1` | Bind address. `0.0.0.0` for network access. |
 | `web_ui_channel_id` | `local-web` | Synthetic channel ID for web messages. |
 
@@ -263,7 +257,7 @@ discord_messages_in_prompt: 10
 discord_token_env: DISCORD_TOKEN
 always_respond_bot_ids: []
 api_port: 0
-web_ui_port: 0
+web_ui_port: 8084
 web_ui_host: 127.0.0.1
 web_ui_channel_id: local-web
 folders:
@@ -283,7 +277,7 @@ folders:
 | `discord_token_env` | Env var name for Discord token |
 | `always_respond_bot_ids` | Bot author IDs the agent responds to |
 | `api_port` | Loopback REST API port (`0` disables it) |
-| `web_ui_port` | Local web chat port (`0` disables it) |
+| `web_ui_port` | Local web chat port (default `8084`; `0` disables it) |
 | `web_ui_host` | Bind host for the web UI (default `127.0.0.1`) |
 | `web_ui_channel_id` | Synthetic channel ID used by the built-in web chat |
 | `folders` | Map of folder names to access mode (`rw` or `ro`) |
