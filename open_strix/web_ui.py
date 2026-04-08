@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from urllib.parse import quote
@@ -217,6 +218,13 @@ def _web_agent_name(strix: OpenStrixApp) -> str:
     return strix.config.name or strix.home.name
 
 
+def _turn_elapsed_seconds(strix: OpenStrixApp) -> float | None:
+    turn_start = strix.current_turn_start
+    if turn_start is None:
+        return None
+    return round(time.monotonic() - turn_start, 1)
+
+
 def _render_web_ui_page(strix: OpenStrixApp) -> str:
     agent_name = _web_agent_name(strix)
     agent_name_json = json.dumps(agent_name)
@@ -296,6 +304,20 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
         min-height: 1.2em;
         padding-left: 0.5rem;
         margin-bottom: 0.15rem;
+      }}
+
+      .typing-indicator.status-slow {{
+        color: #e6a700;
+      }}
+
+      .typing-indicator.status-stuck {{
+        color: #e63946;
+        font-weight: bold;
+      }}
+
+      .elapsed {{
+        font-size: 0.85em;
+        opacity: 0.8;
       }}
 
       .typing-dot {{
@@ -977,8 +999,42 @@ def _render_web_ui_page(strix: OpenStrixApp) -> str:
       function renderMessages(payload) {{
         if (payload.is_processing) {{
           const label = payload.processing_label ? ' (' + payload.processing_label + ')' : '';
-          typingEl.innerHTML = '<span class="typing-dot"></span>' + AGENT_NAME + ' is thinking…' + label;
+          const elapsed = payload.turn_elapsed_seconds;
+          let statusClass = '';
+          let statusText = '';
+
+          if (elapsed !== null && elapsed > 120) {{
+            statusClass = 'status-stuck';
+            const mins = Math.floor(elapsed / 60);
+            const secs = Math.floor(elapsed % 60);
+            statusText =
+              '<span class="typing-dot"></span>' +
+              AGENT_NAME +
+              ' may be stuck' +
+              label +
+              ' <span class="elapsed">' +
+              mins +
+              'm ' +
+              secs +
+              's</span>';
+          }} else if (elapsed !== null && elapsed > 30) {{
+            statusClass = 'status-slow';
+            statusText =
+              '<span class="typing-dot"></span>' +
+              AGENT_NAME +
+              ' is still working…' +
+              label +
+              ' <span class="elapsed">' +
+              Math.floor(elapsed) +
+              's</span>';
+          }} else {{
+            statusText = '<span class="typing-dot"></span>' + AGENT_NAME + ' is thinking…' + label;
+          }}
+
+          typingEl.className = statusClass ? 'typing-indicator ' + statusClass : 'typing-indicator';
+          typingEl.innerHTML = statusText;
         }} else {{
+          typingEl.className = 'typing-indicator';
           typingEl.innerHTML = '';
         }}
 
@@ -1172,7 +1228,15 @@ def _build_web_ui_app(strix: OpenStrixApp) -> web.Application:
         return web.Response(text=_render_web_ui_page(strix), content_type="text/html")
 
     async def health(_: web.Request) -> web.Response:
-        return web.json_response({"status": "ok", "channel_id": strix.config.web_ui_channel_id})
+        return web.json_response(
+            {
+                "status": "ok",
+                "channel_id": strix.config.web_ui_channel_id,
+                "is_processing": strix.current_event_label is not None,
+                "processing_label": strix.current_event_label,
+                "turn_elapsed_seconds": _turn_elapsed_seconds(strix),
+            },
+        )
 
     async def list_messages(request: web.Request) -> web.Response:
         limit_text = request.query.get("limit", "50")
@@ -1190,6 +1254,7 @@ def _build_web_ui_app(strix: OpenStrixApp) -> web.Application:
                 "channel_id": strix.config.web_ui_channel_id,
                 "is_processing": strix.current_event_label is not None,
                 "processing_label": strix.current_event_label,
+                "turn_elapsed_seconds": _turn_elapsed_seconds(strix),
                 "messages": messages,
                 "has_more": has_more,
             },

@@ -4,6 +4,7 @@ from collections import defaultdict, deque
 import io
 import json
 from pathlib import Path
+import time
 
 from aiohttp import web
 from aiohttp.test_utils import make_mocked_request
@@ -37,6 +38,7 @@ class DummyStrix(DiscordMixin, WebChatMixin):
         self._current_turn_sent_messages: list[tuple[str, str]] | None = []
         self.current_channel_id: str | None = None
         self.current_event_label: str | None = None
+        self.current_turn_start: float | None = None
         self.discord_client = None
         self.logged: list[dict[str, object]] = []
         self.enqueued: list[AgentEvent] = []
@@ -93,6 +95,16 @@ def test_web_attachment_payload_strips_leading_slashes_from_urls(tmp_path: Path)
 
     assert payload["path"] == "/state/research-findings/report.md"
     assert payload["url"] == "/files/state/research-findings/report.md"
+
+
+def test_web_ui_page_includes_status_css_classes(tmp_path: Path) -> None:
+    strix = DummyStrix(tmp_path / "atlas")
+
+    page = _render_web_ui_page(strix)
+
+    assert "status-slow" in page
+    assert "status-stuck" in page
+    assert "elapsed" in page
 
 
 @pytest.mark.asyncio
@@ -233,3 +245,48 @@ async def test_web_ui_falls_back_to_home_name_when_display_name_missing(tmp_path
     assert messages_response.status == 200
     messages_body = json.loads(messages_response.text)
     assert messages_body["agent_name"] == "atlas"
+
+
+@pytest.mark.asyncio
+async def test_list_messages_includes_turn_elapsed_when_idle(tmp_path: Path) -> None:
+    strix = DummyStrix(tmp_path / "atlas")
+    app = _build_web_ui_app(strix)
+    handler = _get_route_handler(app, "/api/messages", "GET")
+
+    request = make_mocked_request("GET", "/api/messages", app=app)
+    response = await handler(request)
+
+    body = json.loads(response.text)
+    assert body["turn_elapsed_seconds"] is None
+    assert body["is_processing"] is False
+
+
+@pytest.mark.asyncio
+async def test_list_messages_includes_turn_elapsed_when_processing(tmp_path: Path) -> None:
+    strix = DummyStrix(tmp_path / "atlas")
+    strix.current_event_label = "web_message"
+    strix.current_turn_start = time.monotonic() - 45.0
+    app = _build_web_ui_app(strix)
+    handler = _get_route_handler(app, "/api/messages", "GET")
+
+    request = make_mocked_request("GET", "/api/messages", app=app)
+    response = await handler(request)
+
+    body = json.loads(response.text)
+    assert body["is_processing"] is True
+    assert body["turn_elapsed_seconds"] is not None
+    assert body["turn_elapsed_seconds"] >= 44.0
+
+
+@pytest.mark.asyncio
+async def test_health_includes_turn_state(tmp_path: Path) -> None:
+    strix = DummyStrix(tmp_path / "atlas")
+    app = _build_web_ui_app(strix)
+    handler = _get_route_handler(app, "/api/health", "GET")
+
+    request = make_mocked_request("GET", "/api/health", app=app)
+    response = await handler(request)
+
+    body = json.loads(response.text)
+    assert "is_processing" in body
+    assert "turn_elapsed_seconds" in body
