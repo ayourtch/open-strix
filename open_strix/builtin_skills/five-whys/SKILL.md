@@ -193,6 +193,21 @@ Signs you should keep going:
 - The action items are behavioral resolutions, not file edits
 - There's a "because we always do it that way" that hasn't been questioned
 
+## Storage: Chainlink or Markdown
+
+If `chainlink` is available (check with `which chainlink`), use it. Chainlink gives
+you persistent issue tracking with parent-child relationships, labels, search,
+falsification cascades, and cross-analysis querying. See `CHAINLINK_SETUP.md` for
+installation and `CHAINLINK_USAGE.md` for the workflow.
+
+**Important:** Use a dedicated chainlink database for 5 Whys — separate from task
+tracking or backlog management. RCA chains and task backlogs serve different purposes
+and create noise when mixed. See CHAINLINK_SETUP.md for how to set this up.
+
+If chainlink isn't available, write the tree as structured markdown (see Output
+Format below). The methodology is the same either way — chainlink just gives you
+persistence and search.
+
 ## Output Format
 
 A Five Whys analysis produces a tree. Write it as readable structured text where
