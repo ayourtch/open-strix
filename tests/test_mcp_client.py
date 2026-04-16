@@ -14,6 +14,7 @@ from open_strix.mcp_client import (
     MCPManager,
     MCPServerConfig,
     _bridge_mcp_tool,
+    _build_args_schema,
     parse_mcp_server_configs,
 )
 
@@ -164,6 +165,118 @@ class TestBridgeMCPTool:
         )
         assert tool.name == "mcp_test_ping"
         assert tool.description == "Ping the server"
+
+
+# ---------- _build_args_schema ----------
+
+
+class TestBuildArgsSchema:
+    def test_string_and_int_fields(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Search query"},
+                "limit": {"type": "integer", "description": "Max results"},
+            },
+            "required": ["query"],
+        }
+        model = _build_args_schema("search", schema)
+        assert model.__name__ == "SearchInput"
+        fields = model.model_fields
+        assert "query" in fields
+        assert "limit" in fields
+        assert fields["query"].is_required()
+        assert not fields["limit"].is_required()
+
+    def test_empty_properties(self):
+        model = _build_args_schema("ping", {"type": "object"})
+        assert model.__name__ == "PingInput"
+        assert len(model.model_fields) == 0
+
+    def test_array_and_object_types(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "tags": {"type": "array", "items": {"type": "string"}, "description": "Tags"},
+                "metadata": {"type": "object", "description": "Extra data"},
+            },
+            "required": ["tags"],
+        }
+        model = _build_args_schema("create_item", schema)
+        assert model.__name__ == "CreateItemInput"
+        assert "tags" in model.model_fields
+        assert "metadata" in model.model_fields
+
+    def test_boolean_and_number_types(self):
+        schema = {
+            "type": "object",
+            "properties": {
+                "verbose": {"type": "boolean", "description": "Verbose mode"},
+                "threshold": {"type": "number", "description": "Score threshold"},
+            },
+            "required": [],
+        }
+        model = _build_args_schema("analyze", schema)
+        assert not model.model_fields["verbose"].is_required()
+        assert not model.model_fields["threshold"].is_required()
+
+    def test_hyphenated_tool_name(self):
+        model = _build_args_schema("web-search", {"type": "object", "properties": {}})
+        assert model.__name__ == "WebSearchInput"
+
+
+class TestBridgeMCPToolArgsSchema:
+    def test_tool_has_args_schema(self):
+        session = MagicMock()
+        tool = _bridge_mcp_tool(
+            server_name="test",
+            tool_name="search",
+            description="Search",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Query"},
+                    "count": {"type": "integer", "description": "Count"},
+                },
+                "required": ["query"],
+            },
+            session=session,
+        )
+        assert tool.args_schema is not None
+        fields = tool.args_schema.model_fields
+        assert "query" in fields
+        assert "count" in fields
+        assert fields["query"].is_required()
+
+    @pytest.mark.asyncio
+    async def test_typed_params_passed_directly(self):
+        """Verify that typed parameters are passed as direct kwargs, not wrapped."""
+        session = AsyncMock()
+        mock_result = MagicMock()
+        mock_result.isError = False
+        mock_content = MagicMock()
+        mock_content.text = "result"
+        mock_result.content = [mock_content]
+        session.call_tool = AsyncMock(return_value=mock_result)
+
+        tool = _bridge_mcp_tool(
+            server_name="test",
+            tool_name="search",
+            description="Search",
+            input_schema={
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Query"},
+                },
+                "required": ["query"],
+            },
+            session=session,
+        )
+        result = await tool.ainvoke({"query": "hello"})
+        assert result == "result"
+        # The critical assertion: call_tool should receive {"query": "hello"}
+        # directly, NOT {"kwargs": {"query": "hello"}}
+        session.call_tool.assert_called_once_with("search", {"query": "hello"})
 
 
 # ---------- MCPConnection ----------
